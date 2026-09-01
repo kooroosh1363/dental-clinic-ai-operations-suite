@@ -1,0 +1,85 @@
+{
+  "name": "NovaSmile - Appointment Reminder",
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveDataErrorExecution": "all" },
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Reminder Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "path": "novasmile/reminder",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "validate",
+      "name": "Validate Idempotency Key",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [240, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.idempotencyKey }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "api",
+      "name": "Run Controlled Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOVASMILE_API_URL }}/workflows/appointment-reminder/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.NOVASMILE_SERVICE_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body) }}"
+      }
+    },
+    {
+      "id": "respond",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [720, -80],
+      "parameters": { "respondWith": "json", "responseBody": "={{ $json }}" }
+    }
+  ],
+  "connections": {
+    "Reminder Request": {
+      "main": [
+        [{ "node": "Validate Idempotency Key", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate Idempotency Key": {
+      "main": [
+        [{ "node": "Run Controlled Workflow", "type": "main", "index": 0 }]
+      ]
+    },
+    "Run Controlled Workflow": {
+      "main": [[{ "node": "Return Result", "type": "main", "index": 0 }]]
+    }
+  }
+}

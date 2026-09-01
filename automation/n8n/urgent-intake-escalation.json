@@ -1,0 +1,48 @@
+{
+  "name": "NovaSmile - Urgent Intake Human Escalation",
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveDataErrorExecution": "all" },
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Urgent Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "path": "novasmile/urgent-intake",
+        "httpMethod": "POST",
+        "responseMode": "onReceived"
+      }
+    },
+    {
+      "id": "api",
+      "name": "Create Approval Gate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOVASMILE_API_URL }}/workflows/intake-human-escalation/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.NOVASMILE_SERVICE_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Urgent Intake": {
+      "main": [[{ "node": "Create Approval Gate", "type": "main", "index": 0 }]]
+    }
+  }
+}
