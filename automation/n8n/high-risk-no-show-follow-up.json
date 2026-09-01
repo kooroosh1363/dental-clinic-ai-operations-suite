@@ -1,0 +1,102 @@
+{
+  "name": "NovaSmile - High Risk No-show Follow-up",
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveDataErrorExecution": "all" },
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Hourly Risk Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] }
+      }
+    },
+    {
+      "id": "fetch",
+      "name": "Fetch Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0],
+      "parameters": {
+        "url": "={{ $env.NOVASMILE_API_URL }}/appointments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.NOVASMILE_SERVICE_TOKEN }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "split",
+      "name": "Split Appointments",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [480, 0],
+      "parameters": { "fieldToSplitOut": "data" }
+    },
+    {
+      "id": "risk",
+      "name": "High Risk Only",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [720, 0],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.no_show_score }}",
+              "rightValue": 60,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "run",
+      "name": "Queue Controlled Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOVASMILE_API_URL }}/workflows/high-risk-follow-up/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.NOVASMILE_SERVICE_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ entityId: $json.id, idempotencyKey: 'risk:' + $json.id + ':' + $now.toFormat('yyyy-LL-dd') }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Hourly Risk Check": {
+      "main": [[{ "node": "Fetch Appointments", "type": "main", "index": 0 }]]
+    },
+    "Fetch Appointments": {
+      "main": [[{ "node": "Split Appointments", "type": "main", "index": 0 }]]
+    },
+    "Split Appointments": {
+      "main": [[{ "node": "High Risk Only", "type": "main", "index": 0 }]]
+    },
+    "High Risk Only": {
+      "main": [
+        [{ "node": "Queue Controlled Follow-up", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
